@@ -57,7 +57,7 @@ target_sources(
             include/avernal/rhi/d3d12.hpp
 )
 
-target_link_libraries(avernal-rhi-d3d12 PUBLIC avernal::rhi PRIVATE d3d12 dxgi dxguid)
+target_link_libraries(avernal-rhi-d3d12 PUBLIC avernal::rhi PRIVATE d3d12 dxgi dxguid d3dcompiler)
 target_compile_features(avernal-rhi-d3d12 PUBLIC cxx_std_23)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")

@@ -24,3 +24,17 @@ TEST(D3D12, DeviceMatchesInterface) {
     const avernal::Device& rhi = *device;
     EXPECT_EQ(avernal::backend_name(rhi.backend()), "d3d12");
 }
+
+TEST(D3D12, SubmitsCommandList) {
+    const auto device = avernal::create_d3d12_device({.debug = false});
+    if (device == nullptr) {
+        GTEST_SKIP() << "no D3D12 adapter available";
+    }
+
+    auto commands = device->create_command_list();
+    ASSERT_NE(commands, nullptr);
+    commands->reset();
+    commands->close();
+    device->graphics_queue().submit(*commands);
+    device->graphics_queue().wait_idle();
+}
