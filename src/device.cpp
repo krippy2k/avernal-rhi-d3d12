@@ -32,9 +32,9 @@ struct VSOut {
     float4 position : SV_Position;
 };
 
-VSOut vs_main(float2 position : POSITION) {
+VSOut vs_main(float3 position : POSITION) {
     VSOut output;
-    output.position = float4(position, 0.0, 1.0);
+    output.position = float4(position.xy, 0.0, 1.0);  // Use only XY for 2D
     return output;
 }
 
@@ -48,7 +48,7 @@ Texture2D tex : register(t0);
 SamplerState samp : register(s0);
 
 struct VSIn {
-    float2 position : POSITION;
+    float3 position : POSITION;
     float2 texcoord : TEXCOORD;
 };
 
@@ -59,7 +59,7 @@ struct VSOut {
 
 VSOut vs_main(VSIn input) {
     VSOut output;
-    output.position = float4(input.position, 0.0, 1.0);
+    output.position = float4(input.position.xy, 0.0, 1.0);  // Use only XY for 2D
     output.texcoord = input.texcoord;
     return output;
 }
@@ -260,11 +260,11 @@ public:
 
     void begin_render(Swapchain& swapchain) override;
 
-    void clear_color(float r, float g, float b, float a) override {
+    void clear_color(const Color& color) override {
         AV_ASSERT(rendering_);
-        const float color[] = {r, g, b, a};
+        const float color_array[] = {color.r, color.g, color.b, color.a};
         const D3D12_CPU_DESCRIPTOR_HANDLE rtv = swapchain_->current_rtv();
-        commands_->ClearRenderTargetView(rtv, color, 0, nullptr);
+        commands_->ClearRenderTargetView(rtv, color_array, 0, nullptr);
     }
 
     void set_pipeline(Pipeline& pipeline) override {
@@ -738,7 +738,10 @@ std::unique_ptr<Pipeline> D3D12Device::create_graphics_pipeline(const GraphicsPi
     }
 
     auto pipeline = std::make_unique<D3D12Pipeline>();
-    std::memcpy(pipeline->color, desc.color, sizeof(pipeline->color));
+    pipeline->color[0] = desc.color.r;
+    pipeline->color[1] = desc.color.g;
+    pipeline->color[2] = desc.color.b;
+    pipeline->color[3] = desc.color.a;
     pipeline->use_texture = desc.use_texture;
     pipeline->use_3d = desc.use_3d;
 
@@ -833,25 +836,30 @@ std::unique_ptr<Pipeline> D3D12Device::create_graphics_pipeline(const GraphicsPi
             root_blob->GetBufferSize(), IID_PPV_ARGS(&pipeline->root_signature)));
     }
 
-    // Create input layout
-    D3D12_INPUT_ELEMENT_DESC input[2];
-    UINT input_count = 1;
+    // Create input layout for avernal::render::Vertex format
+    // Vertex layout: position[3], normal[3], texcoord[2], color[4] = 48 bytes total
+    D3D12_INPUT_ELEMENT_DESC input[4];
+    UINT input_count = 0;
     
     if (desc.use_3d) {
-        input[0] = {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,
+        // 3D rendering always uses position (float3)
+        input[input_count++] = {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,
             D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
+        
         if (desc.use_texture) {
-            input[1] = {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12,
+            // Texture coordinates at offset 24 (after position[3] and normal[3])
+            input[input_count++] = {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24,
                 D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
-            input_count = 2;
         }
     } else {
-        input[0] = {"POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 0,
+        // 2D rendering: use position (only XY from float3)
+        input[input_count++] = {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,
             D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
+        
         if (desc.use_texture) {
-            input[1] = {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 8,
+            // Texture coordinates at offset 24
+            input[input_count++] = {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24,
                 D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0};
-            input_count = 2;
         }
     }
 
